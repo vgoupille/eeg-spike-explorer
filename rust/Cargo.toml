@@ -1,0 +1,14 @@
+[package]
+name = "eegspike-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Rust core (PyO3) for eegspike: Teager-Kaiser spike candidate detection"
+license = "MIT"
+
+[lib]
+name = "eegspike_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.30"
+numpy = "0.30"

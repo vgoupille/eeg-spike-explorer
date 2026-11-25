@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eegspike"
+version = "0.1.0"
+description = "Détection de pointes intercritiques et connectivité EEG avec MNE-Python, cœur Rust optionnel et visualiseur WebGPU"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["mne>=1.6", "mne-connectivity>=0.7", "numpy", "scipy", "pandas", "networkx"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+eegspike = "eegspike.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+eegspike = ["viewer_template.html"]
