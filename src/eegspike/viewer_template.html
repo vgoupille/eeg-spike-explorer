@@ -16,6 +16,9 @@
   --spike: #d23c32;       /* spike marker red */
   --spike-soft: rgba(210, 60, 50, .12);
   --window: rgba(11, 110, 143, .16);
+  --ok: #1f8a4c;          /* validated by the reviewer */
+  --added: #7b4fc9;       /* added by the reviewer */
+  --rejected: #9aa7b1;
   --font-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -25,6 +28,7 @@
     --bg: #0e1418; --panel: #141c22; --ink: #e3eaee; --muted: #8fa1ad;
     --grid: #22303a; --trace: #b9d3e0; --accent: #4fb3d6; --spike: #ff6b5e;
     --spike-soft: rgba(255, 107, 94, .14); --window: rgba(79, 179, 214, .2);
+    --ok: #4cc782; --added: #b393f5; --rejected: #5d6c77;
     color-scheme: dark;
   }
 }
@@ -32,6 +36,7 @@
   --bg: #0e1418; --panel: #141c22; --ink: #e3eaee; --muted: #8fa1ad;
   --grid: #22303a; --trace: #b9d3e0; --accent: #4fb3d6; --spike: #ff6b5e;
   --spike-soft: rgba(255, 107, 94, .14); --window: rgba(79, 179, 214, .2);
+  --ok: #4cc782; --added: #b393f5; --rejected: #5d6c77;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -83,6 +88,21 @@ th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; t
 td { padding: 5px 6px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
 td.num { font-family: var(--font-data); text-align: right; }
 .bar { height: 6px; background: var(--accent); border-radius: 3px; opacity: .75; }
+.review { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 9px 12px;
+  border-bottom: 1px solid var(--grid); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.review .grow { flex: 1 1 auto; }
+.review button.ok { border-color: var(--ok); color: var(--ok); }
+.review button.no { border-color: var(--rejected); }
+.review button kbd { margin-left: 4px; }
+.chip { font: 500 11px var(--font-data); padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.pending { color: var(--spike); } .chip.accepted { color: var(--ok); } .chip.rejected { color: var(--rejected); }
+.rvprog { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rvprog .bar { width: 90px; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.rvprog .bar i { display: block; height: 100%; width: 0; background: var(--ok); }
+.rvhint { width: 100%; font-size: 11.5px; color: var(--muted); display: flex; gap: 8px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rvhint > span { min-width: 0; flex: 1 1 320px; }
+.legend { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; background: var(--c); vertical-align: 0; }
 footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
 kbd { font-family: var(--font-data); font-size: 11px; border: 1px solid var(--grid); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; background: var(--panel); }
 @media (max-width: 560px) {
@@ -112,6 +132,17 @@ kbd { font-family: var(--font-data); font-size: 11px; border: 1px solid var(--gr
       <label class="tcode" for="gain">Gain</label>
       <select id="gain"><option value="50">50 µV/div</option><option value="100" selected>100 µV/div</option><option value="200">200 µV/div</option><option value="400">400 µV/div</option></select>
       <span class="pill" id="renderer"><i></i>…</span>
+    </div>
+    <div class="review" id="review" hidden>
+      <span class="tcode" id="rvPos">…</span>
+      <span class="chip pending" id="rvStatus">à relire</span>
+      <button id="rvAccept" class="ok" title="Confirmer que c'est une pointe">Valider<kbd>A</kbd></button>
+      <button id="rvReject" class="no" title="Fausse détection">Rejeter<kbd>R</kbd></button>
+      <button id="rvNext" title="Aller à la prochaine pointe non relue">Suivante à relire<kbd>Espace</kbd></button>
+      <span class="grow"></span>
+      <div class="rvprog"><div class="bar"><i id="rvBar"></i></div><span class="tcode" id="rvStats"></span></div>
+      <div class="rvhint"><span><span class="legend"><span style="--c: var(--spike)">à relire</span><span style="--c: var(--ok)">validée</span><span style="--c: var(--rejected)">rejetée</span><span style="--c: var(--added)">ajoutée</span></span> · Maj + clic sur le tracé ajoute une pointe manquée, Maj + clic sur une pointe ajoutée la retire. <span id="rvMsg" role="status"></span></span>
+        <button id="rvExport" title="Écrire CSV, BIDS events.tsv et annotations MNE dans le dossier de résultats">Exporter</button></div>
     </div>
     <div class="trace-area">
       <div class="labels" id="labels"></div>
@@ -168,6 +199,10 @@ DATA.cand.ch.forEach((c, k) => {
   for (let t = Math.max(0, s - half); t <= Math.min(NT - 1, s + half); t++) mask[c * NT + t] = 1;
 });
 const EV = DATA.events;
+const REVIEW = /*__EEG_REVIEW__*/null;
+const RV = { dec: {}, added: [], stats: null, cur: -1 };
+const statusOf = (e) => RV.dec[e.s] || "pending";
+const statusColor = (e) => ({ pending: "--spike", accepted: "--ok", rejected: "--rejected" })[statusOf(e)];
 
 // ---- header -----------------------------------------------------------
 const P = M.params;
@@ -300,14 +335,26 @@ function drawOverlay() {
     g.fillText(fmtT(s).slice(0, 5), x + 3 * d, H - 4 * d);
   }
   const row = H / NCH, hot = new Set();
-  for (const e of EV) {
-    if (e.t < st.start - 0.1 || e.t > st.start + st.win + 0.1) continue;
-    const x = px(e.t);
-    g.fillStyle = css("--spike-soft"); g.fillRect(x - 0.06 * W / st.win, 0, 0.12 * W / st.win, H);
-    g.fillStyle = css("--spike");
+  const bw = 0.12 * W / st.win;
+  EV.forEach((e, i) => {
+    if (e.t < st.start - 0.1 || e.t > st.start + st.win + 0.1) return;
+    const x = px(e.t), col = css(REVIEW ? statusColor(e) : "--spike");
+    g.globalAlpha = REVIEW && statusOf(e) === "rejected" ? 0.08 : 0.14;
+    g.fillStyle = col; g.fillRect(x - bw / 2, 0, bw, H); g.globalAlpha = 1;
+    g.fillStyle = col;
     g.beginPath(); g.moveTo(x - 4 * d, 0); g.lineTo(x + 4 * d, 0); g.lineTo(x, 7 * d); g.fill();
     g.beginPath(); g.arc(x, row * (e.lead + 0.5), 3 * d, 0, 7); g.fill();
-    e.chs.forEach((c) => hot.add(c));
+    if (REVIEW && i === RV.cur) { g.strokeStyle = css("--accent"); g.lineWidth = 2 * d; g.strokeRect(x - bw / 2 - 2 * d, d, bw + 4 * d, H - 2 * d); g.lineWidth = 1; }
+    if (!REVIEW || statusOf(e) !== "rejected") e.chs.forEach((c) => hot.add(c));
+  });
+  if (REVIEW) {
+    g.strokeStyle = css("--added"); g.fillStyle = css("--added"); g.lineWidth = 2 * d; g.setLineDash([6 * d, 4 * d]);
+    for (const a of RV.added) {
+      if (a.t < st.start || a.t > st.start + st.win) continue;
+      const x = Math.round(px(a.t)); g.beginPath(); g.moveTo(x, 10 * d); g.lineTo(x, H); g.stroke();
+      g.fillRect(x - 5 * d, 0, 10 * d, 8 * d);
+    }
+    g.setLineDash([]); g.lineWidth = 1;
   }
   [...labels.children].forEach((el, i) => el.classList.toggle("hot", hot.has(i)));
   $("tpos").textContent = `${fmtT(st.start)} → ${fmtT(st.start + st.win)}`;
@@ -323,8 +370,12 @@ function drawTimeline() {
   g.clearRect(0, 0, W, H);
   g.fillStyle = css("--window");
   g.fillRect(st.start / M.duration * W, 0, Math.max(2, st.win / M.duration * W), H);
-  g.fillStyle = css("--spike");
-  for (const e of EV) { const h = (e.n / NCH) * (H - 4 * d); g.fillRect(e.t / M.duration * W, H - h, Math.max(1, d), h); }
+  for (const e of EV) {
+    const h = (e.n / NCH) * (H - 4 * d);
+    g.fillStyle = css(REVIEW ? statusColor(e) : "--spike");
+    g.fillRect(e.t / M.duration * W, H - h, Math.max(1, d), h);
+  }
+  if (REVIEW) { g.fillStyle = css("--added"); for (const a of RV.added) g.fillRect(a.t / M.duration * W - d, 0, 2 * d, 10 * d); }
   g.fillStyle = css("--grid"); g.fillRect(0, H - d, W, d);
 }
 tl.addEventListener("click", (ev) => {
@@ -336,13 +387,24 @@ tl.addEventListener("click", (ev) => {
 function jump(dir) {
   const mid = st.start + st.win / 2;
   const e = dir > 0 ? EV.find((e) => e.t > mid + 0.05) : [...EV].reverse().find((e) => e.t < mid - 0.05);
-  if (e) { st.start = e.t - st.win / 2; clampStart(); draw(); }
+  if (e) goTo(EV.indexOf(e));
+}
+function goTo(i) {
+  RV.cur = i; st.start = EV[i].t - st.win / 2; clampStart(); draw(); if (REVIEW) updateReview();
 }
 $("nextEv").onclick = () => jump(1); $("prevEv").onclick = () => jump(-1);
 $("win").onchange = (e) => { const mid = st.start + st.win / 2; st.win = +e.target.value; st.start = mid - st.win / 2; clampStart(); draw(); };
 $("gain").onchange = (e) => { st.gain = +e.target.value; draw(); };
 let drag = null;
-ov.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, s: st.start }; ov.setPointerCapture(e.pointerId); });
+ov.addEventListener("pointerdown", (e) => {
+  if (REVIEW && e.shiftKey) {
+    const r = ov.getBoundingClientRect(), t = st.start + (e.clientX - r.left) / r.width * st.win;
+    const near = RV.added.find((a) => Math.abs(a.t - t) < 0.15 * st.win / 10);
+    near ? removeAdded(near) : addSpike(t);
+    return;
+  }
+  drag = { x: e.clientX, s: st.start }; ov.setPointerCapture(e.pointerId);
+});
 ov.addEventListener("pointermove", (e) => { if (!drag) return; const w = ov.getBoundingClientRect().width; st.start = drag.s - (e.clientX - drag.x) / w * st.win; clampStart(); draw(); });
 ov.addEventListener("pointerup", () => { drag = null; });
 ov.addEventListener("wheel", (e) => { e.preventDefault(); st.start += (e.deltaY + e.deltaX) / 400 * st.win; clampStart(); draw(); }, { passive: false });
@@ -351,6 +413,9 @@ window.addEventListener("keydown", (e) => {
   const gains = [50, 100, 200, 400];
   if (e.key === "ArrowRight") { st.start += st.win / 2; clampStart(); draw(); }
   else if (e.key === "ArrowLeft") { st.start -= st.win / 2; clampStart(); draw(); }
+  else if (REVIEW && (e.key === "a" || e.key === "A")) decide("accepted");
+  else if (REVIEW && (e.key === "r" || e.key === "R")) decide("rejected");
+  else if (REVIEW && e.key === " ") nextPending();
   else if (e.key === "n" || e.key === "N") jump(1);
   else if (e.key === "p" || e.key === "P") jump(-1);
   else if (e.key === "+" || e.key === "-") {
@@ -414,10 +479,74 @@ matSel.onchange = renderConn;
 
 // ---- boot ------------------------------------------------------------
 const first = EV.length ? EV.reduce((a, b) => (b.n > a.n ? b : a)) : null;
-if (first) st.start = first.t - st.win / 2;
+if (first) { st.start = first.t - st.win / 2; RV.cur = EV.indexOf(first); }
 clampStart();
 renderConn();
 initWebGPU().catch(() => false).then((ok) => { if (!ok) initCanvas2D(); draw(); });
+if (REVIEW) initReview();
+
+// ---- review mode (only with `eegspike review`) --------------------------
+async function api(method, path, body) {
+  const r = await fetch(REVIEW.api + path, { method, headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || `erreur ${r.status}`);
+  return j;
+}
+const say = (m) => { $("rvMsg").textContent = m; };
+async function initReview() {
+  $("review").hidden = false;
+  try { const s = await api("GET", ""); RV.dec = s.decisions; RV.added = s.added; RV.stats = s.stats; }
+  catch (err) { say(`Serveur injoignable : ${err.message}`); }
+  updateReview(); draw();
+}
+function updateReview() {
+  const e = EV[RV.cur], s = RV.stats;
+  if (e) {
+    $("rvPos").textContent = `Pointe ${RV.cur + 1} / ${EV.length} · ${fmtT(e.t)} · ${M.ch_names[e.lead]} · ${e.n} canaux`;
+    const st_ = statusOf(e), chip = $("rvStatus");
+    chip.className = `chip ${st_}`; chip.textContent = { pending: "à relire", accepted: "validée", rejected: "rejetée" }[st_];
+  }
+  if (s) {
+    const prec = s.precision == null ? "–" : `${Math.round(s.precision * 100)} %`;
+    $("rvStats").textContent = `${s.reviewed} / ${s.n_events} relues · précision ${prec} · ${s.added} ajoutée${s.added > 1 ? "s" : ""}`;
+    $("rvBar").style.width = `${(s.reviewed / Math.max(1, s.n_events) * 100).toFixed(1)}%`;
+  }
+}
+async function decide(status) {
+  const e = EV[RV.cur]; if (!e) return;
+  const prev = RV.dec[e.s], next = prev === status ? "pending" : status;   // same key twice = undo
+  if (next === "pending") delete RV.dec[e.s]; else RV.dec[e.s] = next;
+  updateReview(); draw();
+  try { RV.stats = await api("PUT", `/events/${e.s}`, { status: next }); say(""); }
+  catch (err) { if (prev) RV.dec[e.s] = prev; else delete RV.dec[e.s]; say(`Non enregistré : ${err.message}`); }
+  updateReview();
+  if (next !== "pending") nextPending();
+}
+function nextPending() {
+  for (let k = 1; k <= EV.length; k++) {
+    const i = (RV.cur + k) % EV.length;
+    if (statusOf(EV[i]) === "pending") return goTo(i);
+  }
+  say("Toutes les pointes détectées sont relues.");
+}
+async function addSpike(t) {
+  try { const r = await api("POST", "/added", { t }); RV.added.push(r.item); RV.added.sort((a, b) => a.t - b.t); RV.stats = r.stats; say(`Pointe ajoutée à ${fmtT(t)}`); }
+  catch (err) { say(`Non enregistré : ${err.message}`); }
+  updateReview(); draw();
+}
+async function removeAdded(a) {
+  try { RV.stats = await api("DELETE", `/added/${a.id}`); RV.added = RV.added.filter((x) => x.id !== a.id); say("Pointe ajoutée retirée"); }
+  catch (err) { say(`Non enregistré : ${err.message}`); }
+  updateReview(); draw();
+}
+$("rvAccept").onclick = () => decide("accepted");
+$("rvReject").onclick = () => decide("rejected");
+$("rvNext").onclick = () => nextPending();
+$("rvExport").onclick = async () => {
+  try { const r = await api("POST", "/export"); say(`Exporté : ${Object.values(r.files).join(", ")}`); }
+  catch (err) { say(`Export impossible : ${err.message}`); }
+};
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { draw(); renderConn(); }, 80); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { draw(); renderConn(); });
 new MutationObserver(() => { draw(); renderConn(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

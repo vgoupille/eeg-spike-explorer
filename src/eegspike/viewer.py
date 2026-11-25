@@ -52,7 +52,7 @@ def build_payload(raw: mne.io.BaseRaw, spikes, mats: dict, source: str,
     idx = {c: i for i, c in enumerate(ch)}
     cand = spikes.candidates
     events = [
-        {"t": round(float(r.time), 4), "n": int(r.n_channels),
+        {"t": round(float(r.time), 4), "s": int(r.sample), "n": int(r.n_channels),
          "lead": idx[r.lead_channel], "score": round(float(r.score), 2),
          "chs": [idx[c] for c in r.channels.split(";")]}
         for r in spikes.events.itertuples()
@@ -84,17 +84,23 @@ def build_payload(raw: mne.io.BaseRaw, spikes, mats: dict, source: str,
     }
 
 
-def write_viewer(payload: dict, out: str | Path, standalone: bool = True) -> Path:
-    """Write the viewer. ``standalone`` adds the <html>/<head> skeleton so the
-    file opens directly in a browser (offline, no server needed)."""
+def render_viewer(payload: dict, standalone: bool = True, review: bool = False) -> str:
+    """Fill the HTML template. ``standalone`` adds the <html>/<head> skeleton so
+    the file opens directly in a browser; ``review`` turns on the review panel,
+    which talks to the API of ``eegspike review``."""
     template = resources.files("eegspike").joinpath("viewer_template.html").read_text("utf-8")
     html = template.replace("/*__EEG_DATA__*/null", json.dumps(payload, separators=(",", ":")))
+    html = html.replace("/*__EEG_REVIEW__*/null", '{"api":"/api/review"}' if review else "null")
     if standalone:
         html = ('<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
                 '<style>html{color-scheme:light dark}body{margin:0}</style>\n</head>\n<body>\n'
                 + html + "\n</body>\n</html>\n")
+    return html
+
+
+def write_viewer(payload: dict, out: str | Path, standalone: bool = True) -> Path:
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
+    out.write_text(render_viewer(payload, standalone), encoding="utf-8")
     return out

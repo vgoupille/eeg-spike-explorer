@@ -12,7 +12,8 @@ license = { text = "MIT" }
 dependencies = ["mne>=1.6", "mne-connectivity>=0.7", "numpy", "scipy", "pandas", "networkx"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+app = ["fastapi>=0.110", "uvicorn>=0.27"]
+dev = ["pytest", "httpx", "fastapi>=0.110", "uvicorn>=0.27"]
 
 [project.scripts]
 eegspike = "eegspike.cli:main"

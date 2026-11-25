@@ -26,6 +26,31 @@ Sur l'enregistrement de démonstration (sujet 01, 5 min de sommeil N3) :
 | Détection Rust vs NumPy | ≈ 4 à 7× plus rapide, sorties identiques (testé) |
 | Pipeline complet | ≈ 5 s sur un portable |
 
+## Mode relecture : le clinicien corrige le détecteur
+
+```bash
+pip install -e ".[app]"
+eegspike review data/sub-01_run-01.edf -o results    # ouvre http://127.0.0.1:8765
+```
+
+![Mode relecture : pointes validées en vert, rejetées en gris, ajoutée en violet](docs/review-mode.png)
+
+Un petit serveur **FastAPI** sert l'interface et une API REST. Pour chaque pointe proposée, le relecteur tape **A** (valider) ou **R** (rejeter) et passe automatiquement à la suivante. **Maj + clic** sur le tracé ajoute une pointe que le détecteur a ratée.
+
+- Chaque décision est écrite tout de suite dans `results/review.json` : on peut fermer et reprendre plus tard.
+- Compteur en direct : pointes relues et **précision du détecteur** (part des détections confirmées). Une fois tout relu, les pointes ajoutées donnent aussi le **rappel** (part des vraies pointes trouvées).
+- **Exporter** écrit `*_review.csv`, `*_events.tsv` au format **BIDS** et `*_spikes-annot.fif`, lisible par `mne.read_annotations`.
+
+C'est la boucle qui manque au détecteur : les corrections d'un expert deviennent des annotations, qui servent à mesurer le détecteur puis à en entraîner un meilleur.
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/review` | décisions, pointes ajoutées, statistiques |
+| PUT | `/api/review/events/{sample}` | `{"status": "accepted" \| "rejected" \| "pending"}` |
+| POST | `/api/review/added` | `{"t": 12.34}` ajoute une pointe manquée |
+| DELETE | `/api/review/added/{id}` | retire une pointe ajoutée |
+| POST | `/api/review/export` | écrit CSV, BIDS et annotations MNE |
+
 ## Démarrage rapide
 
 ```bash
@@ -73,7 +98,7 @@ Les étapes 2 à 4 existent en NumPy (référence lisible) et en Rust (multithre
 ## Tests
 
 ```bash
-pip install pytest && pytest -q        # Python : détection sur pointes synthétiques, Rust == NumPy, graphe
+pip install -e ".[dev]" && pytest -q   # 12 tests : détection, Rust == NumPy, graphe, API de relecture
 cd rust && cargo test                  # Rust : tests unitaires du cœur
 ```
 
@@ -85,7 +110,7 @@ cd rust && cargo test                  # Rust : tests unitaires du cœur
 
 - **Pas un outil clinique.** Le détecteur est volontairement simple et n'a pas été validé contre des annotations d'experts (ce jeu de données annote les HFO, pas les pointes). L'étape suivante serait une évaluation sensibilité / précision sur un jeu annoté, puis la comparaison avec un détecteur appris (CNN 1D en PyTorch).
 - Connectivité en espace capteurs bipolaire : utile pour comparer des canaux, mais l'interprétation anatomique demanderait une reconstruction de sources.
-- Interface : sélection de canaux, annotation manuelle des pointes et export, intégration dans MNE-Qt-Browser ou une application Qt.
+- Relecture : plusieurs relecteurs et accord inter-experts, sélection de canaux, réentraînement d'un détecteur appris à partir des annotations exportées.
 
 ## Auteur
 
