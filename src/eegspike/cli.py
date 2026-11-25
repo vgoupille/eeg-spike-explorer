@@ -1,8 +1,9 @@
 """Command line.
 
-    eegspike run recording.edf -o results/      # analyse + static viewer
-    eegspike review recording.edf -o results/   # review application in the browser
+eegspike run recording.edf -o results/      # analyse + static viewer
+eegspike review recording.edf -o results/   # review application in the browser
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,23 +35,33 @@ def cmd_run(a):
     ev = spikes.events
     dur = raw.times[-1]
     print(f"[1/4] {Path(a.edf).name}: {len(raw.ch_names)} canaux, {dur:.0f} s, {raw.info['sfreq']:.0f} Hz")
-    print(f"[2/4] {len(spikes.candidates)} candidats, {len(ev)} événements "
-          f"({len(ev) / (dur / 60):.1f}/min), détecteur {spikes.params['backend']}")
+    print(
+        f"[2/4] {len(spikes.candidates)} candidats, {len(ev)} événements "
+        f"({len(ev) / (dur / 60):.1f}/min), détecteur {spikes.params['backend']}"
+    )
     if "detect_rust_ms" in timings:
-        print(f"      Rust {timings['detect_rust_ms']:.1f} ms vs NumPy {timings['detect_numpy_ms']:.1f} ms, "
-              f"résultats identiques : {timings['rust_matches_numpy']}")
+        print(
+            f"      Rust {timings['detect_rust_ms']:.1f} ms vs NumPy {timings['detect_numpy_ms']:.1f} ms, "
+            f"résultats identiques : {timings['rust_matches_numpy']}"
+        )
     hubs = graph_table(connectivity_graph(mats["spike_cooc"], raw.ch_names))
-    print(f"[3/4] connectivité : {', '.join(mats)} ; canaux centraux (co-occurrence) : {', '.join(hubs.index[:3])}")
+    print(
+        f"[3/4] connectivité : {', '.join(mats)} ; "
+        f"canaux centraux (co-occurrence) : {', '.join(hubs.index[:3])}"
+    )
 
     spikes.candidates.to_csv(out / "spike_candidates.csv", index=False)
     ev.to_csv(out / "spike_events.csv", index=False)
     hubs.to_csv(out / "graph_hubs.csv")
     np.savez_compressed(out / "connectivity.npz", ch_names=np.array(raw.ch_names), **mats)
     summary = {
-        "file": Path(a.edf).name, "duration_s": float(dur),
-        "n_events": int(len(ev)), "events_per_min": float(len(ev) / (dur / 60)),
+        "file": Path(a.edf).name,
+        "duration_s": float(dur),
+        "n_events": int(len(ev)),
+        "events_per_min": float(len(ev) / (dur / 60)),
         "params": {k: (list(v) if isinstance(v, tuple) else v) for k, v in spikes.params.items()},
-        "timings": timings, "top_channels": hubs.index[:5].tolist(),
+        "timings": timings,
+        "top_channels": hubs.index[:5].tolist(),
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
     html = write_viewer(build_payload(raw, spikes, mats, Path(a.edf).name, timings), out / "viewer.html")
@@ -60,23 +71,28 @@ def cmd_run(a):
 def cmd_review(a):
     try:
         import uvicorn
+
         from .app import build_review_app
     except ImportError:  # pragma: no cover
-        raise SystemExit("Le mode relecture demande FastAPI : pip install 'eegspike[app]'")
+        raise SystemExit("Le mode relecture demande FastAPI : pip install 'eegspike[app]'") from None
     print(f"Analyse de {Path(a.edf).name}…")
-    app = build_review_app(a.edf, a.out, tmin=a.tmin, tmax=a.tmax, k=a.k,
-                           min_channels=a.min_channels, backend=a.backend)
+    app = build_review_app(
+        a.edf, a.out, tmin=a.tmin, tmax=a.tmax, k=a.k, min_channels=a.min_channels, backend=a.backend
+    )
     url = f"http://127.0.0.1:{a.port}"
     print(f"Relecture prête : {url}  (décisions enregistrées dans {a.out}/review.json, Ctrl+C pour quitter)")
     if not a.no_browser:
         import threading
         import webbrowser
+
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(app, host="127.0.0.1", port=a.port, log_level="warning")
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="eegspike", description="Détection de pointes intercritiques et connectivité EEG")
+    ap = argparse.ArgumentParser(
+        prog="eegspike", description="Détection de pointes intercritiques et connectivité EEG"
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="analyser un fichier EDF et générer viewer.html")
     _common(r)

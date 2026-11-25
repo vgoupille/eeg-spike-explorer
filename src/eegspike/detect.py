@@ -18,6 +18,7 @@ clinically validated tool):
 Steps 2-4 have two identical implementations: NumPy (reference) and Rust
 (``eegspike_rs``, compiled with PyO3/maturin, multithreaded).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -59,28 +60,34 @@ def _detect_numpy(x: np.ndarray, k: float, smooth_n: int, refractory_n: int):
         med = _median(e)
         mad = _median(np.abs(e - med))
         thr = med + k * mad / 0.6745
-        cand = np.flatnonzero(
-            (e[1:-1] > thr) & (e[1:-1] > e[:-2]) & (e[1:-1] >= e[2:])
-        ) + 1
-        kept: list[list[float]] = []
-        for t in cand:
-            v = e[t]
+        cand = np.flatnonzero((e[1:-1] > thr) & (e[1:-1] > e[:-2]) & (e[1:-1] >= e[2:])) + 1
+        kept: list[tuple[int, float]] = []
+        for t in cand.tolist():
+            v = float(e[t])
             if kept and t - kept[-1][0] < refractory_n:
                 if v > kept[-1][1]:
-                    kept[-1] = [t, v]
+                    kept[-1] = (t, v)
                 continue
-            kept.append([t, v])
+            kept.append((t, v))
         for t, v in kept:
             chs.append(c)
             samples.append(int(t))
             scores.append(v / thr)
-    return (np.asarray(chs, dtype=np.int64), np.asarray(samples, dtype=np.int64),
-            np.asarray(scores, dtype=float))
+    return (
+        np.asarray(chs, dtype=np.int64),
+        np.asarray(samples, dtype=np.int64),
+        np.asarray(scores, dtype=float),
+    )
 
 
-def detect_candidates(x: np.ndarray, sfreq: float, k: float = 8.0,
-                      smooth_ms: float = 20.0, refractory_ms: float = 200.0,
-                      backend: str = "auto"):
+def detect_candidates(
+    x: np.ndarray,
+    sfreq: float,
+    k: float = 8.0,
+    smooth_ms: float = 20.0,
+    refractory_ms: float = 200.0,
+    backend: str = "auto",
+):
     """Per-channel spike candidates on an array (n_channels, n_times).
 
     Returns (channel_idx, sample_idx, score) arrays. ``backend`` is
@@ -99,20 +106,20 @@ def detect_candidates(x: np.ndarray, sfreq: float, k: float = 8.0,
 
 @dataclass
 class SpikeResult:
-    candidates: pd.DataFrame   # one row per (channel, spike)
-    events: pd.DataFrame       # one row per multi-channel event
+    candidates: pd.DataFrame  # one row per (channel, spike)
+    events: pd.DataFrame  # one row per multi-channel event
     ch_names: list[str]
     sfreq: float
     params: dict
 
 
-def group_events(cand: pd.DataFrame, sfreq: float, window_ms: float = 80.0,
-                 min_channels: int = 2) -> pd.DataFrame:
+def group_events(
+    cand: pd.DataFrame, sfreq: float, window_ms: float = 80.0, min_channels: int = 2
+) -> pd.DataFrame:
     """Merge per-channel candidates that occur within ``window_ms`` of each
     other into events seen on at least ``min_channels`` channels."""
     if cand.empty:
-        return pd.DataFrame(columns=["time", "sample", "n_channels", "channels",
-                                     "lead_channel", "score"])
+        return pd.DataFrame(columns=["time", "sample", "n_channels", "channels", "lead_channel", "score"])
     win = window_ms * sfreq / 1000
     c = cand.sort_values("sample").reset_index(drop=True)
     groups = np.cumsum(np.r_[0, np.diff(c["sample"].to_numpy()) > win])
@@ -122,35 +129,50 @@ def group_events(cand: pd.DataFrame, sfreq: float, window_ms: float = 80.0,
         if len(chans) < min_channels:
             continue
         lead = g.loc[g["score"].idxmax()]
-        rows.append({
-            "time": lead["sample"] / sfreq,
-            "sample": int(lead["sample"]),
-            "n_channels": len(chans),
-            "channels": ";".join(chans),
-            "lead_channel": lead["channel"],
-            "score": float(g["score"].max()),
-        })
+        rows.append(
+            {
+                "time": lead["sample"] / sfreq,
+                "sample": int(lead["sample"]),
+                "n_channels": len(chans),
+                "channels": ";".join(chans),
+                "lead_channel": lead["channel"],
+                "score": float(g["score"].max()),
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def detect_spikes(raw: mne.io.BaseRaw, band: tuple[float, float] = (3.0, 35.0),
-                  k: float = 15.0, smooth_ms: float = 20.0,
-                  refractory_ms: float = 200.0, window_ms: float = 80.0,
-                  min_channels: int = 3, backend: str = "auto") -> SpikeResult:
+def detect_spikes(
+    raw: mne.io.BaseRaw,
+    band: tuple[float, float] = (3.0, 35.0),
+    k: float = 15.0,
+    smooth_ms: float = 20.0,
+    refractory_ms: float = 200.0,
+    window_ms: float = 80.0,
+    min_channels: int = 3,
+    backend: str = "auto",
+) -> SpikeResult:
     """Detect interictal spikes on an MNE Raw object."""
     sfreq = raw.info["sfreq"]
     xr = raw.copy().filter(*band, verbose="error").get_data() * 1e6  # µV
-    ch_idx, samp, score = detect_candidates(xr, sfreq, k, smooth_ms,
-                                            refractory_ms, backend)
+    ch_idx, samp, score = detect_candidates(xr, sfreq, k, smooth_ms, refractory_ms, backend)
     names = np.array(raw.ch_names)
-    cand = pd.DataFrame({
-        "channel": names[ch_idx] if len(ch_idx) else np.array([], dtype=str),
-        "sample": samp,
-        "time": samp / sfreq,
-        "score": score,
-    })
+    cand = pd.DataFrame(
+        {
+            "channel": names[ch_idx] if len(ch_idx) else np.array([], dtype=str),
+            "sample": samp,
+            "time": samp / sfreq,
+            "score": score,
+        }
+    )
     events = group_events(cand, sfreq, window_ms, min_channels)
-    params = dict(band=band, k=k, smooth_ms=smooth_ms, refractory_ms=refractory_ms,
-                  window_ms=window_ms, min_channels=min_channels,
-                  backend="rust" if (backend == "rust" or (backend == "auto" and _rs)) else "numpy")
+    params = dict(
+        band=band,
+        k=k,
+        smooth_ms=smooth_ms,
+        refractory_ms=refractory_ms,
+        window_ms=window_ms,
+        min_channels=min_channels,
+        backend="rust" if (backend == "rust" or (backend == "auto" and _rs)) else "numpy",
+    )
     return SpikeResult(cand, events, list(raw.ch_names), sfreq, params)

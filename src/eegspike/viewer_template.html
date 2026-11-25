@@ -40,6 +40,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--font-body);
   font-size: 14px; line-height: 1.5;
@@ -88,6 +89,9 @@ th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; t
 td { padding: 5px 6px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
 td.num { font-family: var(--font-data); text-align: right; }
 .bar { height: 6px; background: var(--accent); border-radius: 3px; opacity: .75; }
+.detbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+.detbar .grow { flex: 1 1 auto; }
+.detbar input[type=range] { width: min(260px, 50vw); accent-color: var(--accent); }
 .review { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 9px 12px;
   border-bottom: 1px solid var(--grid); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 .review .grow { flex: 1 1 auto; }
@@ -132,6 +136,16 @@ kbd { font-family: var(--font-data); font-size: 11px; border: 1px solid var(--gr
       <label class="tcode" for="gain">Gain</label>
       <select id="gain"><option value="50">50 µV/div</option><option value="100" selected>100 µV/div</option><option value="200">200 µV/div</option><option value="400">400 µV/div</option></select>
       <span class="pill" id="renderer"><i></i>…</span>
+    </div>
+    <div class="detbar" id="detbar" hidden>
+      <span class="pill"><i></i> Détecteur en direct</span>
+      <label class="tcode" for="kslider">Seuil</label>
+      <input type="range" id="kslider" min="6" max="30" step="0.5" value="15" aria-describedby="kval">
+      <span class="tcode" id="kval">15 × MAD</span>
+      <label class="tcode" for="minch">Canaux min.</label>
+      <select id="minch"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+      <span class="grow"></span>
+      <span class="tcode" id="wasmTime"></span>
     </div>
     <div class="review" id="review" hidden>
       <span class="tcode" id="rvPos">…</span>
@@ -207,12 +221,14 @@ const statusColor = (e) => ({ pending: "--spike", accepted: "--ok", rejected: "-
 // ---- header -----------------------------------------------------------
 const P = M.params;
 $("sub").textContent = `${M.source} · ${NCH} canaux bipolaires · ${FS} Hz · ${Math.round(M.duration)} s`;
-const rate = (EV.length / (M.duration / 60)).toFixed(1);
-$("stats").innerHTML = [
-  ["Événements", EV.length], ["Par minute", rate],
-  ["Candidats canal", DATA.cand.ch.length],
-  ["Détecteur", P.backend === "rust" ? "Rust" : "NumPy"],
-].map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join("");
+let nCand = DATA.cand.ch.length, engine = P.backend === "rust" ? "Rust" : "NumPy";
+function renderStats() {
+  $("stats").innerHTML = [
+    ["Événements", EV.length], ["Par minute", (EV.length / (M.duration / 60)).toFixed(1)],
+    ["Candidats canal", nCand], ["Détecteur", engine],
+  ].map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join("");
+}
+renderStats();
 $("durcap").textContent = fmtT(M.duration);
 const tm = M.timings || {};
 $("foot").innerHTML = [
@@ -232,6 +248,7 @@ const clampStart = () => { st.start = Math.max(0, Math.min(M.duration - st.win, 
 // ---- renderers --------------------------------------------------------
 const gpuCanvas = $("gpu"), ov = $("overlay"), stage = $("stage");
 let draw = () => {};
+let uploadMask = () => {};
 function hexToRgb(h) {
   if (h.startsWith("#")) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
   const m = h.match(/[\d.]+/g).map(Number); return [m[0] / 255, m[1] / 255, m[2] / 255];
@@ -252,6 +269,7 @@ async function initWebGPU() {
   ctx.configure({ device, format, alphaMode: "premultiplied" });
   const mk = (arr) => { const b = device.createBuffer({ size: arr.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(b, 0, arr); return b; };
   const sigBuf = mk(sig), maskBuf = mk(mask);
+  uploadMask = () => device.queue.writeBuffer(maskBuf, 0, mask);
   const ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   // One instance per channel; the vertex shader reads samples straight from a
   // storage buffer, so panning only updates 64 bytes of uniforms.
@@ -409,7 +427,7 @@ ov.addEventListener("pointermove", (e) => { if (!drag) return; const w = ov.getB
 ov.addEventListener("pointerup", () => { drag = null; });
 ov.addEventListener("wheel", (e) => { e.preventDefault(); st.start += (e.deltaY + e.deltaX) / 400 * st.win; clampStart(); draw(); }, { passive: false });
 window.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "SELECT") return;
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
   const gains = [50, 100, 200, 400];
   if (e.key === "ArrowRight") { st.start += st.win / 2; clampStart(); draw(); }
   else if (e.key === "ArrowLeft") { st.start -= st.win / 2; clampStart(); draw(); }
@@ -428,9 +446,9 @@ window.addEventListener("keydown", (e) => {
 // ---- connectivity panels ---------------------------------------------
 const matSel = $("mat");
 Object.entries(DATA.matrices).forEach(([k, v]) => matSel.add(new Option(v.label, k)));
-const maxSpk = Math.max(1, ...perCh);
 function renderConn() {
   const key = matSel.value, G = DATA.graphs[key], vals = DATA.matrices[key].values;
+  const maxSpk = Math.max(1, ...perCh);
   const acc = css("--accent"), ink = css("--ink"), mut = css("--muted"), grid = css("--grid"), spk = css("--spike");
   const S = 200, R = 150, cx = S, cy = S + 6;
   const P2 = DATA.pos.map((p) => p ? [cx + p[0] * R, cy - p[1] * R] : null);
@@ -476,6 +494,65 @@ function renderConn() {
   $("hubs").innerHTML = rows.map((r) => `<tr><td>${r.n}</td><td class="num">${r.k}</td><td class="num">${r.s.toFixed(2)}</td><td><div class="bar" style="width:${(r.s / smax * 100).toFixed(0)}%"></div></td></tr>`).join("");
 }
 matSel.onchange = renderConn;
+
+// ---- live detector: the Rust core compiled to WebAssembly ---------------
+const WASM_B64 = /*__WASM__*/"";
+let det = null;
+async function initWasm() {
+  if (!WASM_B64 || REVIEW || !DATA.det_signal) return;
+  const { instance } = await WebAssembly.instantiate(Uint8Array.from(atob(WASM_B64), (c) => c.charCodeAt(0)));
+  const w = instance.exports, n = NCH * NT;
+  const b = atob(DATA.det_signal), raw = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) raw[i] = b.charCodeAt(i);
+  const q = new Int16Array(raw.buffer), ptr = w.alloc_f64(n);
+  const x = new Float64Array(w.memory.buffer, ptr, n);
+  for (let i = 0; i < n; i++) x[i] = q[i] * DATA.det_scale;
+  det = { w, ptr };
+  $("detbar").hidden = false;
+  $("wasmTime").textContent = "Bougez le seuil : la détection tourne dans le navigateur";
+}
+function redetect() {
+  if (!det) return;
+  const k = +$("kslider").value, minCh = +$("minch").value, w = det.w;
+  const sn = Math.max(1, Math.round(P.smooth_ms * FS / 1000)), rn = Math.max(1, Math.round(P.refractory_ms * FS / 1000));
+  const t0 = performance.now();
+  const m = w.detect(det.ptr, NCH, NT, k, sn, rn);
+  const ms = performance.now() - t0;
+  const ch = new Uint32Array(w.memory.buffer, w.out_channels(), m).slice();
+  const ss = new Uint32Array(w.memory.buffer, w.out_samples(), m).slice();
+  const sc = new Float64Array(w.memory.buffer, w.out_scores(), m).slice();
+  // group candidates into multi-channel events, as eegspike.detect.group_events
+  const order = Array.from(ss.keys()).sort((a, b) => ss[a] - ss[b] || a - b);
+  const win = P.window_ms * FS / 1000, out = [];
+  let g = [];
+  const flush = () => {
+    if (!g.length) return;
+    const chans = [...new Set(g.map((i) => ch[i]))].sort((a, b) => a - b);
+    if (chans.length >= minCh) {
+      const lead = g.reduce((a, i) => (sc[i] > sc[a] ? i : a), g[0]);
+      out.push({ t: ss[lead] / FS, s: ss[lead], n: chans.length, lead: ch[lead], score: sc[lead], chs: chans });
+    }
+    g = [];
+  };
+  order.forEach((i, j) => { if (j && ss[i] - ss[order[j - 1]] > win) flush(); g.push(i); });
+  flush();
+  EV.length = 0; out.forEach((e) => EV.push(e));
+  mask.fill(0); perCh.fill(0);
+  for (let i = 0; i < m; i++) {
+    perCh[ch[i]]++;
+    const s = ss[i], c = ch[i];
+    for (let t = Math.max(0, s - half); t <= Math.min(NT - 1, s + half); t++) mask[c * NT + t] = 1;
+  }
+  nCand = m; engine = "WebAssembly";
+  uploadMask(); renderStats(); renderConn(); draw();
+  $("kval").textContent = `${k} × MAD`;
+  $("wasmTime").textContent = `${m} candidats, ${EV.length} événements · Rust/WebAssembly ${ms.toFixed(1)} ms`;
+}
+let rq = 0;
+const schedule = () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(redetect); };
+$("kslider").addEventListener("input", schedule);
+$("minch").addEventListener("change", schedule);
+initWasm().catch((err) => console.warn("WebAssembly indisponible", err));
 
 // ---- boot ------------------------------------------------------------
 const first = EV.length ? EV.reduce((a, b) => (b.n > a.n ? b : a)) : null;

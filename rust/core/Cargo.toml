@@ -1,0 +1,8 @@
+[package]
+name = "eegspike-core"
+version = "0.1.0"
+edition = "2021"
+description = "Spike candidate detection (Teager-Kaiser + robust threshold), no dependencies"
+license = "MIT"
+
+[dependencies]

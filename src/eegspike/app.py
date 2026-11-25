@@ -5,9 +5,9 @@
 serves the interactive viewer with a review panel; every decision is saved to
 ``results/review.json`` immediately.
 """
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -46,7 +46,7 @@ def create_app(payload: dict, store: ReviewStore, out_dir: str | Path, stem: str
         try:
             store.set_status(sample, body.status)
         except KeyError:
-            raise HTTPException(404, f"no detected event at sample {sample}")
+            raise HTTPException(404, f"no detected event at sample {sample}") from None
         return store.stats()
 
     @app.post("/api/review/added", status_code=201)
@@ -61,7 +61,7 @@ def create_app(payload: dict, store: ReviewStore, out_dir: str | Path, stem: str
         try:
             store.remove(item_id)
         except KeyError:
-            raise HTTPException(404, f"no added spike {item_id}")
+            raise HTTPException(404, f"no added spike {item_id}") from None
         return store.stats()
 
     @app.post("/api/review/export")

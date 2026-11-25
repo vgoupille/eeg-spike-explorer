@@ -1,7 +1,10 @@
 data/
 results/
 rust/target/
+rust/core/target/
+wasm/target/
 __pycache__/
 *.egg-info/
 .pytest_cache/
 *.whl
+.venv/

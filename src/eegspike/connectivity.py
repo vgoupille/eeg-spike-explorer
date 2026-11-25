@@ -8,6 +8,7 @@ Three complementary matrices (n_channels x n_channels):
 * ``spike_cooc``: how often two channels take part in the same spike event
   (Jaccard index). It maps the spatial spread of the irritative zone.
 """
+
 from __future__ import annotations
 
 import mne
@@ -26,13 +27,18 @@ BANDS = {
 def wpli(raw: mne.io.BaseRaw, bands=BANDS, epoch_s: float = 2.0) -> dict[str, np.ndarray]:
     from mne_connectivity import spectral_connectivity_epochs
 
-    epochs = mne.make_fixed_length_epochs(raw, duration=epoch_s, preload=True,
-                                          verbose="error")
+    epochs = mne.make_fixed_length_epochs(raw, duration=epoch_s, preload=True, verbose="error")
     fmin = tuple(b[0] for b in bands.values())
     fmax = tuple(b[1] for b in bands.values())
     con = spectral_connectivity_epochs(
-        epochs, method="wpli", mode="multitaper", sfreq=raw.info["sfreq"],
-        fmin=fmin, fmax=fmax, faverage=True, verbose="error",
+        epochs,
+        method="wpli",
+        mode="multitaper",
+        sfreq=raw.info["sfreq"],
+        fmin=fmin,
+        fmax=fmax,
+        faverage=True,
+        verbose="error",
     )
     data = con.get_data(output="dense")  # (n, n, n_bands), lower triangle
     out = {}
@@ -85,7 +91,7 @@ def connectivity_graph(mat: np.ndarray, ch_names: list[str], density: float = 0.
     thr = np.sort(w)[-k]
     g = nx.Graph()
     g.add_nodes_from(ch_names)
-    for i, j, v in zip(*iu, w):
+    for i, j, v in zip(*iu, w, strict=True):
         if v >= thr and v > 0:
             g.add_edge(ch_names[i], ch_names[j], weight=float(v))
     strength = dict(g.degree(weight="weight"))
@@ -98,5 +104,8 @@ def connectivity_graph(mat: np.ndarray, ch_names: list[str], density: float = 0.
 
 
 def graph_table(g: nx.Graph) -> pd.DataFrame:
-    return (pd.DataFrame.from_dict(dict(g.nodes(data=True)), orient="index")
-            .rename_axis("channel").sort_values("strength", ascending=False))
+    return (
+        pd.DataFrame.from_dict(dict(g.nodes(data=True)), orient="index")
+        .rename_axis("channel")
+        .sort_values("strength", ascending=False)
+    )

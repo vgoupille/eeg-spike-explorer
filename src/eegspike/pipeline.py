@@ -1,9 +1,11 @@
 """The full analysis in one call, shared by `eegspike run` and `eegspike review`."""
+
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 
+import mne
 import numpy as np
 
 from .connectivity import compute_connectivity
@@ -13,14 +15,21 @@ from .io import load_eeg
 
 @dataclass
 class Analysis:
-    raw: object
+    raw: mne.io.BaseRaw
     spikes: SpikeResult
     mats: dict
     timings: dict
 
 
-def analyze(edf: str, tmin=None, tmax=None, k: float = 15.0, min_channels: int = 3,
-            backend: str = "auto", benchmark: bool = True) -> Analysis:
+def analyze(
+    edf: str,
+    tmin=None,
+    tmax=None,
+    k: float = 15.0,
+    min_channels: int = 3,
+    backend: str = "auto",
+    benchmark: bool = True,
+) -> Analysis:
     raw = load_eeg(edf, tmin=tmin, tmax=tmax)
     spikes = detect_spikes(raw, k=k, min_channels=min_channels, backend=backend)
     timings: dict = {}
@@ -36,7 +45,8 @@ def analyze(edf: str, tmin=None, tmax=None, k: float = 15.0, min_channels: int =
                 best = min(best, time.perf_counter() - t)
             timings[f"detect_{b}_ms"] = best * 1000
         if "rust" in res:
-            timings["rust_matches_numpy"] = bool(all(
-                np.array_equal(res["numpy"][i], res["rust"][i]) for i in (0, 1)))
+            timings["rust_matches_numpy"] = bool(
+                all(np.array_equal(res["numpy"][i], res["rust"][i]) for i in (0, 1))
+            )
     mats = compute_connectivity(raw, spikes.events)
     return Analysis(raw, spikes, mats, timings)

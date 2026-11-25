@@ -1,4 +1,5 @@
 """Loading and preprocessing EEG recordings with MNE-Python."""
+
 from __future__ import annotations
 
 import mne
@@ -6,11 +7,24 @@ import numpy as np
 
 # Classic 18-channel longitudinal bipolar montage ("double banana") + Fz-Cz, Cz-Pz
 DOUBLE_BANANA = [
-    "Fp1-F7", "F7-T3", "T3-T5", "T5-O1",
-    "Fp2-F8", "F8-T4", "T4-T6", "T6-O2",
-    "Fp1-F3", "F3-C3", "C3-P3", "P3-O1",
-    "Fp2-F4", "F4-C4", "C4-P4", "P4-O2",
-    "Fz-Cz", "Cz-Pz",
+    "Fp1-F7",
+    "F7-T3",
+    "T3-T5",
+    "T5-O1",
+    "Fp2-F8",
+    "F8-T4",
+    "T4-T6",
+    "T6-O2",
+    "Fp1-F3",
+    "F3-C3",
+    "C3-P3",
+    "P3-O1",
+    "Fp2-F4",
+    "F4-C4",
+    "C4-P4",
+    "P4-O2",
+    "Fz-Cz",
+    "Cz-Pz",
 ]
 
 

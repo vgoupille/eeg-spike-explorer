@@ -13,7 +13,7 @@ dependencies = ["mne>=1.6", "mne-connectivity>=0.7", "numpy", "scipy", "pandas",
 
 [project.optional-dependencies]
 app = ["fastapi>=0.110", "uvicorn>=0.27"]
-dev = ["pytest", "httpx", "fastapi>=0.110", "uvicorn>=0.27"]
+dev = ["pytest", "httpx", "fastapi>=0.110", "uvicorn>=0.27", "ruff", "ty", "maturin>=1.5,<2"]
 
 [project.scripts]
 eegspike = "eegspike.cli:main"
@@ -22,4 +22,15 @@ eegspike = "eegspike.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-eegspike = ["viewer_template.html"]
+eegspike = ["viewer_template.html", "eegspike_core.wasm"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "NPY"]
+ignore = ["B008"]
+
+[tool.ty.environment]
+python-version = "3.12"

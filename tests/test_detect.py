@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eegspike.detect import detect_candidates, group_events, rust_available, _detect_numpy
-from eegspike.connectivity import spike_cooccurrence, connectivity_graph
+from eegspike.connectivity import connectivity_graph, spike_cooccurrence
+from eegspike.detect import detect_candidates, group_events, rust_available
 
 FS = 250.0
 
@@ -17,7 +17,7 @@ def synthetic(n_ch=6, seconds=60, spikes_at=(10.0, 25.5, 40.2), seed=0):
     tri = np.concatenate([np.linspace(0, 1, w // 2), np.linspace(1, 0, w - w // 2)]) * 250
     for t in spikes_at:
         s = int(t * FS)
-        x[:3, s:s + w] += tri
+        x[:3, s : s + w] += tri
     return x
 
 
@@ -45,7 +45,7 @@ def test_cooccurrence_and_graph():
     ev = pd.DataFrame({"channels": ["A;B", "A;B;C", "C;D"]})
     m = spike_cooccurrence(ev, names)
     assert np.allclose(m, m.T)
-    assert m[0, 1] == pytest.approx(1.0)        # A and B always together
+    assert m[0, 1] == pytest.approx(1.0)  # A and B always together
     assert m[0, 3] == 0.0
     g = connectivity_graph(m, names, density=0.5)
     assert g.has_edge("A", "B")

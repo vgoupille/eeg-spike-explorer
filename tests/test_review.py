@@ -10,11 +10,16 @@ from fastapi.testclient import TestClient  # noqa: E402
 from eegspike.app import create_app  # noqa: E402
 from eegspike.review import ReviewStore  # noqa: E402
 
-EVENTS = pd.DataFrame({
-    "time": [1.0, 2.5, 4.0], "sample": [250, 625, 1000], "n_channels": [3, 5, 4],
-    "channels": ["A;B;C", "A;B;C;D;E", "B;C;D;E"], "lead_channel": ["A", "C", "D"],
-    "score": [2.0, 3.5, 1.4],
-})
+EVENTS = pd.DataFrame(
+    {
+        "time": [1.0, 2.5, 4.0],
+        "sample": [250, 625, 1000],
+        "n_channels": [3, 5, 4],
+        "channels": ["A;B;C", "A;B;C;D;E", "B;C;D;E"],
+        "lead_channel": ["A", "C", "D"],
+        "score": [2.0, 3.5, 1.4],
+    }
+)
 PAYLOAD = {"meta": {"duration": 10.0}}
 
 
@@ -72,5 +77,11 @@ def test_export(client):
     assert list(bids.columns) == ["onset", "duration", "trial_type", "value"]
     assert np.allclose(bids.onset, [1.0, 7.5]) and list(bids.value) == ["validated", "added"]
     import mne
+
     ann = mne.read_annotations(tmp / files["mne"])
-    assert sorted(set(ann.description)) == ["spike/accepted", "spike/added", "spike/pending", "spike/rejected"]
+    assert sorted(set(ann.description)) == [
+        "spike/accepted",
+        "spike/added",
+        "spike/pending",
+        "spike/rejected",
+    ]

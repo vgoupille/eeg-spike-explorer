@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = "0.30"
 numpy = "0.30"
+eegspike-core = { path = "core" }
