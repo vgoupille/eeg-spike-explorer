@@ -18,7 +18,8 @@ jobs:
           uv run ty check src
       - name: Build the Rust core for Python (PyO3) and for the browser (WebAssembly)
         run: |
-          cd rust && uv run maturin build --release && uv pip install target/wheels/*.whl && cd ..
+          uv run maturin build --release -m rust/Cargo.toml
+          uv pip install rust/target/wheels/*.whl
           cargo build --release --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown
           cp wasm/target/wasm32-unknown-unknown/release/eegspike_wasm.wasm src/eegspike/eegspike_core.wasm
       - name: Tests

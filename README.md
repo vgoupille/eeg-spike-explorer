@@ -67,7 +67,7 @@ C'est la boucle qui manque au détecteur : les corrections d'un expert deviennen
 
 ```bash
 uv sync --extra dev                    # environnement Python complet en quelques secondes (uv.lock)
-(cd rust && uv run maturin build --release && uv pip install target/wheels/*.whl)   # optionnel : cœur Rust
+uv run maturin build --release -m rust/Cargo.toml && uv pip install rust/target/wheels/*.whl   # optionnel : cœur Rust
 scripts/download_data.sh 01 01         # 5 min d'EEG, OpenNeuro ds003555 (CC0)
 uv run eegspike run data/sub-01_run-01.edf -o results
 open results/viewer.html               # Chrome / Edge / Safari 18+ pour WebGPU
