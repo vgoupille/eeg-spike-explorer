@@ -33,4 +33,5 @@ select = ["E", "F", "I", "B", "UP", "NPY"]
 ignore = ["B008"]
 
 [tool.ty.environment]
+extra-paths = ["rust"]  # eegspike_rs.pyi stub, for checks without the compiled extension
 python-version = "3.12"
