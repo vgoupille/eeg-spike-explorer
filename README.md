@@ -4,6 +4,8 @@ Détection automatique de **pointes intercritiques** et analyse de **connectivit
 
 Projet réalisé en une soirée (novembre 2026) pour montrer une chaîne complète, de l'EDF brut à une interface utilisable par un clinicien, en m'appuyant sur un assistant IA pour aller vite sur les parties interface et Rust.
 
+**Démo en ligne : [vgoupille.github.io/eeg-spike-explorer](https://vgoupille.github.io/eeg-spike-explorer/)** (Chrome, Edge ou Safari 18+ pour WebGPU ; page d'environ 7 Mo).
+
 ![Visualiseur : tracé EEG avec pointes détectées, réseau sur le scalp, matrice de connectivité](docs/viewer-dark.png)
 
 ## Ce que fait le projet
